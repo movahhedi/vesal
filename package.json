@@ -1,0 +1,84 @@
+{
+	"name": "magfa-api",
+	"version": "1.2.1",
+	"description": "Magfa SMS API client for JS/TS/ESM/Node.js",
+	"author": {
+		"name": "Shahab Movahhedi",
+		"email": "dev@shmovahhedi.com",
+		"url": "https://shmovahhedi.com/"
+	},
+	"homepage": "https://github.com/movahhedi/magfa-api",
+	"repository": {
+		"type": "git",
+		"url": "https://github.com/movahhedi/magfa-api.git",
+		"directory": "/"
+	},
+	"bugs": "https://github.com/movahhedi/magfa-api",
+	"license": "MIT",
+	"keywords": [
+		"magfa-api",
+		"magfa-sdk",
+		"magfa",
+		"magfa-js",
+		"sms-typescript",
+		"sms-ir",
+		"magfa.ir",
+		"magfa.com",
+		"sms",
+		"messaging",
+		"api"
+	],
+	"type": "module",
+	"source": "./src/magfa.ts",
+	"main": "./dist/magfa.cjs",
+	"module": "./dist/magfa.mjs",
+	"types": "./dist/magfa.d.ts",
+	"typings": "./dist/magfa.d.ts",
+	"umd:main": "./dist/magfa.umd.js",
+	"unpkg": "./dist/magfa.umd.js",
+	"exports": {
+		".": {
+			"require": "./dist/magfa.cjs",
+			"default": "./dist/magfa.modern.js"
+		},
+		"./ts": "./src/magfa.ts",
+		"./package.json": "./package.json"
+	},
+	"files": [
+		"src",
+		"dist"
+	],
+	"cspell": {
+		"version": "0.2",
+		"language": ["en", "fa"],
+		"words": [
+			"Armaghan",
+			"Vesal",
+			"likeToLike",
+			"microbundle"
+		],
+		"ignorePaths": [
+			"README.fa.md"
+		]
+	},
+	"packageManager": "yarn@4.0.2",
+	"scripts": {
+		"build": "microbundle build --raw true --generateType -f modern,esm,cjs,umd",
+		"dev": "microbundle watch -f modern,esm,cjs,umd"
+	},
+	"devDependencies": {
+		"@typescript-eslint/eslint-plugin": "^6.19.0",
+		"@typescript-eslint/parser": "^6.19.0",
+		"concurrently": "^8.2.2",
+		"eslint": "^8.56.0",
+		"eslint-config-prettier": "^9.1.0",
+		"eslint-plugin-prettier": "^5.1.3",
+		"eslint-plugin-react": "^7.33.2",
+		"eslint-plugin-redos": "^4.4.5",
+		"microbundle": "^0.15.1",
+		"npm-check-updates": "^16.14.12",
+		"prettier": "^3.2.4",
+		"rimraf": "^5.0.5",
+		"typescript": "^5.3.3"
+	}
+}
