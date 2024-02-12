@@ -1,47 +1,46 @@
 {
-	"name": "magfa-api",
-	"version": "1.2.1",
-	"description": "Magfa SMS API client for JS/TS/ESM/Node.js",
+	"name": "vesal",
+	"version": "0.1.0",
+	"description": "Armaghan Vesal SMS API client for JS/TS/ESM/Node.js",
 	"author": {
 		"name": "Shahab Movahhedi",
 		"email": "dev@shmovahhedi.com",
 		"url": "https://shmovahhedi.com/"
 	},
-	"homepage": "https://github.com/movahhedi/magfa-api",
+	"homepage": "https://github.com/movahhedi/vesal",
 	"repository": {
 		"type": "git",
-		"url": "https://github.com/movahhedi/magfa-api.git",
+		"url": "https://github.com/movahhedi/vesal.git",
 		"directory": "/"
 	},
-	"bugs": "https://github.com/movahhedi/magfa-api",
+	"bugs": "https://github.com/movahhedi/vesal",
 	"license": "MIT",
 	"keywords": [
-		"magfa-api",
-		"magfa-sdk",
-		"magfa",
-		"magfa-js",
-		"sms-typescript",
+		"vesal",
+		"vesal-sdk",
+		"vesal-js",
 		"sms-ir",
-		"magfa.ir",
-		"magfa.com",
+		"armaghan-vesal",
+		"vesal.armaghan.net",
+		"armaghan",
 		"sms",
 		"messaging",
 		"api"
 	],
 	"type": "module",
-	"source": "./src/magfa.ts",
-	"main": "./dist/magfa.cjs",
-	"module": "./dist/magfa.mjs",
-	"types": "./dist/magfa.d.ts",
-	"typings": "./dist/magfa.d.ts",
-	"umd:main": "./dist/magfa.umd.js",
-	"unpkg": "./dist/magfa.umd.js",
+	"source": "./src/vesal.ts",
+	"main": "./dist/vesal.cjs",
+	"module": "./dist/vesal.mjs",
+	"types": "./dist/vesal.d.ts",
+	"typings": "./dist/vesal.d.ts",
+	"umd:main": "./dist/vesal.umd.js",
+	"unpkg": "./dist/vesal.umd.js",
 	"exports": {
 		".": {
-			"require": "./dist/magfa.cjs",
-			"default": "./dist/magfa.modern.js"
+			"require": "./dist/vesal.cjs",
+			"default": "./dist/vesal.modern.js"
 		},
-		"./ts": "./src/magfa.ts",
+		"./ts": "./src/vesal.ts",
 		"./package.json": "./package.json"
 	},
 	"files": [
@@ -50,12 +49,18 @@
 	],
 	"cspell": {
 		"version": "0.2",
-		"language": ["en", "fa"],
+		"language": [
+			"en",
+			"fa"
+		],
 		"words": [
 			"Armaghan",
-			"Vesal",
 			"likeToLike",
-			"microbundle"
+			"mclass",
+			"microbundle",
+			"referenceids",
+			"refrence",
+			"Vesal"
 		],
 		"ignorePaths": [
 			"README.fa.md"

@@ -1,8 +1,3 @@
-type IVesalResponse = {
-	status: number;
-	messages: any[];
-};
-
 /**
  * The Vesal API Class
  * @author Shahab Movahhedi
@@ -11,24 +6,15 @@ type IVesalResponse = {
  * @license MIT
  */
 export class Vesal {
-	public readonly apiUrl = "https://sms.vesal.com/api/http/sms/v2";
+	public readonly apiUrl = "http://vesal.armaghan.net:8080/rest";
 	private username: string;
-	private domain: string;
 	private password: string;
 	private from: string;
-	private authHeader: string;
 
-	constructor(username: string, password: string, domain: string, from: string) {
+	constructor(username: string, password: string, from: string) {
 		this.username = username || "";
 		this.password = password;
-		this.domain = domain;
 		this.from = from;
-
-		this.authHeader =
-			"Basic " +
-			Buffer.from(`${this.username}/${this.domain}:${this.password}`).toString(
-				"base64",
-			);
 
 		return this;
 	}
@@ -43,17 +29,22 @@ export class Vesal {
 	 */
 	private async Api(
 		urlSuffix: string,
-		method: "GET" | "POST" = "GET",
+		method: "GET" | "POST" = "POST",
 		data?: object,
 	): Promise<any> {
 		let response: Response, responseBody: any;
+
+		data = {
+			...data,
+			username: this.username,
+			password: this.password,
+		};
 
 		try {
 			response = await fetch(`${this.apiUrl}/${urlSuffix}`, {
 				headers: {
 					Accept: "application/json",
 					"Content-Type": "application/json",
-					Authorization: this.authHeader,
 				},
 				method,
 				body: data && JSON.stringify(data),
@@ -68,16 +59,8 @@ export class Vesal {
 			throw new VesalError(undefined, "The server didn't respond correctly");
 		}
 
-		if (typeof responseBody?.status === "undefined") {
+		if (!responseBody.references) {
 			throw new VesalError(undefined, "The server didn't respond correctly");
-		}
-
-		if (responseBody.status === 0) {
-			return responseBody;
-		}
-
-		if (Object.keys(vesalErrors).includes("" + responseBody.status)) {
-			throw new VesalError(responseBody.status);
 		}
 
 		return responseBody;
@@ -86,16 +69,12 @@ export class Vesal {
 	async Send({
 		recipients,
 		messages,
-		encodings,
-		uids,
-		udhs,
+		from,
 	}: {
 		recipients: string | string[];
 		messages: string | string[];
-		encodings?: Encoding | Encoding[];
-		uids?: number[];
-		udhs?: string[];
-	}): Promise<ISendResponseWithCount> {
+		from?: string | string[];
+	}): Promise<IVesalResponse_Send_WithCount> {
 		if (!recipients || !messages) {
 			throw new VesalError(
 				undefined,
@@ -106,61 +85,73 @@ export class Vesal {
 		if (typeof recipients === "string") {
 			recipients = [recipients];
 		}
-		if (typeof messages === "string") {
-			messages = [messages];
+
+		if (!from) {
+			from = this.from;
 		}
 
-		if (
-			!messages.length ||
-			(recipients.length !== messages.length && messages.length !== 1)
-		) {
-			throw new VesalError(
-				undefined,
-				"recipients and messages should have the same length",
-			);
-		}
+		const isManyToMany = Array.isArray(messages) || Array.isArray(from);
 
-		// const senders = messages.map(() => this.from);
-		const senders = Array(recipients.length).fill(this.from);
+		if (isManyToMany) {
+			if (!recipients.length) {
+				throw new VesalError(
+					undefined,
+					"recipients and messages should have the same length",
+				);
+			}
+			if (Array.isArray(messages) && !messages.length) {
+				throw new VesalError(
+					undefined,
+					"recipients and messages should have the same length",
+				);
+			}
 
-		if (encodings && !Array.isArray(encodings)) {
-			encodings = Array(recipients.length).fill(encodings);
+			if (typeof messages === "string") {
+				// messages = recipients.map(() => messages);
+				messages = Array(recipients.length).fill(messages);
+			}
+			if (typeof from === "string") {
+				// from = recipients.map(() => from);
+				from = Array(recipients.length).fill(from);
+			}
+
+			if (
+				recipients.length !== messages.length ||
+				recipients.length !== from.length
+			) {
+				throw new VesalError(
+					undefined,
+					"recipients and messages should have the same length",
+				);
+			}
 		}
 
 		const sendData = {
-			recipients,
-			messages,
-			senders,
-			encodings,
-			uids,
-			udhs,
+			destinations: recipients,
+			...(isManyToMany ? { originators: from } : { originator: from }),
+			...(isManyToMany ? { contents: messages } : { content: messages }),
 		};
 
-		const result: IVesalResponse_Send = await this.Api("send", "POST", sendData);
-
-		const messagesMutated: ISentMessage[] = [];
+		const result: IVesalResponse_Send = await this.Api(
+			isManyToMany ? "ManyToMany" : "OneToMany",
+			"POST",
+			sendData,
+		);
 
 		let successCount: number = 0,
 			failCount: number = 0;
 
-		result.messages.map((messageResult: ISentMessage) => {
-			if (messageResult.status === 0) {
-				const obj = { ...messageResult, message: "پیام با موفقیت رسید" };
-				messagesMutated.push(obj);
+		result.references?.map((messageResult) => {
+			if (messageResult) {
 				successCount++;
 			} else {
-				const obj = {
-					...messageResult,
-					message: GetStatusText(messageResult.status),
-				};
-				messagesMutated.push(obj);
 				failCount++;
 			}
 		});
 
 		return {
 			...result,
-			messages: messagesMutated,
+			references: result.references || [],
 			count: {
 				success: successCount,
 				fail: failCount,
@@ -168,26 +159,24 @@ export class Vesal {
 		};
 	}
 
-	async Statuses(mids: number[]): Promise<IVesalResponse_Statuses> {
-		return await this.Api(`statuses/${mids.join(",")}`);
+	async GetMessageStatus(
+		referencesIds: number[],
+	): Promise<IVesalResponse_MessageState> {
+		return await this.Api("messageState", "POST", {
+			referenceids: referencesIds,
+		});
 	}
 
-	async Mid(uid: number): Promise<IVesalResponse_Mid> {
-		const result = (await this.Api(`mid/${uid}`)) as IVesalResponse_Mid;
-		return {
-			...result,
-			mid: result.mid || undefined,
-		};
+	async GetReceivedMessages(): Promise<IVesalResponse_ReceivedMessages> {
+		return await this.Api("pullReceivedMessages");
 	}
 
-	async Balance(): Promise<IVesalResponse_Balance> {
-		return await this.Api("balance");
+	async GetReceivedMessagesCount(): Promise<IVesalResponse_ReceivedMessagesCount> {
+		return await this.Api("receivedMessageCount");
 	}
 
-	async ReceivedMessages(
-		count: number = 100,
-	): Promise<IVesalResponse_ReceivedMessages> {
-		return await this.Api(`messages/${count}`);
+	async GetUserInfo(): Promise<IVesalResponse_UserInfo> {
+		return await this.Api("userInfo");
 	}
 }
 
@@ -212,87 +201,64 @@ export class VesalError extends Error {
 	}
 }
 
-type IStatusCode = 0 | keyof typeof vesalErrors;
-
 interface IVesalResponse_Base {
-	status: IStatusCode;
-}
-
-interface IVesalResponse_Balance extends IVesalResponse_Base {
-	balance: number | null;
+	errorModel: {
+		errorCode: number;
+		timestamp: string | number | null;
+	};
 }
 
 interface IVesalResponse_Send extends IVesalResponse_Base {
-	messages: ISentMessage[];
+	references: (number | Omit<keyof typeof vesalErrors, 0>)[];
 }
 
-interface IVesalResponse_Statuses extends IVesalResponse_Base {
-	dlrs: {
-		/** شناسه یکتای پیامک */
-		mid: number;
-		/** وضعیت */
-		status: number;
-		/** `yyyy-mm-dd hh:mm:ss` */
-		date: string;
-	}[];
-}
-
-interface IVesalResponse_ReceivedMessages extends IVesalResponse_Base {
-	messages: {
-		/** پیام */
-		body: string;
-		/** فرستنده */
-		senderNumber: string;
-		/** گیرنده */
-		recipientNumber: string;
-		/** `yyyy-mm-dd hh:mm:ss` */
-		date: string;
-	}[];
-}
-
-interface IVesalResponse_Mid extends IVesalResponse_Base {
-	mid: number | undefined;
-}
-
-interface ISendResponseWithCount extends IVesalResponse_Send {
+interface IVesalResponse_Send_WithCount extends IVesalResponse_Send {
 	count: {
 		success: number;
 		fail: number;
 	};
 }
 
-interface ISentMessage {
-	/** نشانگر وضعیت درخواست. مقدار صفر به معنای انجام بدون خطای درخواست و هر عدد غیر از صفر کد خطای مربوطه است. */
-	status: IStatusCode;
-
-	/** شناسه یکتای پیامک */
-	id: number;
-
-	/** شناسه‌ی یکتای کاربر */
-	userId: number;
-
-	/** تعداد بخش‌های پیامک */
-	parts: number;
-
-	/** تعرفه */
-	tariff: number;
-
-	/** `DEFAULT` for English (ASCII), `UCS2` for Persian */
-	alphabet: "DEFAULT" | "UCS2";
-
-	/** گیرنده */
-	recipient: string;
+interface IVesalResponse_MessageState extends IVesalResponse_Base {
+	states: {
+		id: number;
+		state: number;
+	}[];
 }
-
-export const enum Encoding {
-	/** تشخیص خودکار زبان پیامک (پیش فرض) */
-	Auto = 0,
-	/** فارسی */
-	Persian = 2,
-	/** 8bit */
-	EightBit = 5,
-	/** Binary */
-	Binary = 6,
+interface IVesalResponse_ReceivedMessages extends IVesalResponse_Base {
+	messageModels: {
+		originator: string;
+		destination: string;
+		content: string;
+	}[];
+}
+interface IVesalResponse_ReceivedMessagesCount extends IVesalResponse_Base {
+	count: number;
+}
+interface IVesalResponse_UserInfo extends IVesalResponse_Base {
+	user: {
+		credit: number;
+		deliveryUrl: unknown;
+		receiveUrl: unknown;
+		iPs: string[];
+		numbers: string[];
+		id: number;
+		username: string;
+		password: unknown;
+		firstName: unknown;
+		lastName: unknown;
+		mobile: unknown;
+		email: unknown;
+		nationalId: number;
+		expirationDate: string;
+		active: boolean;
+		deleted: boolean;
+		dbProxyStandalone: boolean;
+		insertDate: unknown;
+		updateDate: unknown;
+		customer: unknown;
+		roles: unknown;
+	};
 }
 
 export function GetStatusText(status: number) {
@@ -305,48 +271,40 @@ export function GetStatusText(status: number) {
 	return "";
 }
 
-export const vesalErrors = {
-	1: "شماره گیرنده نادرست است",
-	2: "شماره فرستنده نادرست است",
-	3: "پارامتر encoding نامعتبر است. (بررسی صحت و هم‌خوانی متن پیامک با encoding انتخابی)",
-	4: "پارامتر mclass نامعتبر است",
-	6: "پارامتر UDH نامعتبر است",
-	13: "محتویات پیامک (ترکیب UDH و متن) خالی است. (بررسی دوباره‌ی متن پیامک و پارامتر UDH)",
-	14: "مانده اعتبار ریالی مورد نیاز برای ارسال پیامک کافی نیست",
-	15: "سرور در هنگام ارسال پیام مشغول برطرف نمودن ایراد داخلی بوده است. (ارسال مجدد درخواست)",
-	16: "حساب غیرفعال است. (تماس با واحد فروش سیستم‌های ارتباطی)",
-	17: "حساب منقضی شده است. (تماس با واحد فروش سیستم‌های ارتباطی)",
-	18: "نام کاربری و یا کلمه عبور نامعتبر است. (بررسی مجدد نام کاربری و کلمه عبور)",
-	19: "درخواست معتبر نیست. (ترکیب نام کاربری، رمز عبور و دامنه اشتباه است. تماس با واحد فروش برای دریافت کلمه عبور جدید)",
-	20: "شماره فرستنده به حساب تعلق ندارد",
-	22: "این سرویس برای حساب فعال نشده است",
-	23: "در حال حاضر امکان پردازش درخواست جدید وجود ندارد، لطفا دوباره سعی کنید. (ارسال مجدد درخواست)",
-	24: "شناسه پیامک معتبر نیست. (ممکن است شناسه پیامک اشتباه و یا متعلق به پیامکی باشد که بیش از یک روز از ارسال آن گذشته)",
-	25: "نام متد درخواستی معتبر نیست. (بررسی نگارش نام متد با توجه به بخش متدها در این راهنما)",
-	27: "شماره گیرنده در لیست سیاه اپراتور قرار دارد. (ارسال پیامک‌های تبلیغاتی برای این شماره امکان‌پذیر نیست)",
-	28: "شماره گیرنده، بر اساس پیش‌شماره در حال حاضر در مگفا مسدود است",
-	29: "آدرس IP مبدا، اجازه دسترسی به این سرویس را ندارد",
-	30: "تعداد بخش‌های پیامک بیش از حد مجاز استاندارد (۲۶۵ عدد) است",
-	31: "داده‌های موردنیاز برای ارسال کافی نیستند. (اصلاح HTTP Request)",
-	101: "طول آرایه پارامتر messageBodies با طول آرایه گیرندگان تطابق ندارد",
-	102: "طول آرایه پارامتر messageClass با طول آرایه گیرندگان تطابق ندارد",
-	103: "طول آرایه پارامتر senderNumbers با طول آرایه گیرندگان تطابق ندارد",
-	104: "طول آرایه پارامتر udhs با طول آرایه گیرندگان تطابق ندارد",
-	105: "طول آرایه پارامتر priorities با طول آرایه گیرندگان تطابق ندارد",
-	106: "آرایه‌ی گیرندگان خالی است",
-	107: "طول آرایه پارامتر گیرندگان بیشتر از طول مجاز است",
-	108: "آرایه‌ی فرستندگان خالی است",
-	109: "طول آرایه پارامتر encoding با طول آرایه گیرندگان تطابق ندارد",
-	110: "طول آرایه پارامتر checkingMessageIds با طول آرایه گیرندگان تطابق ندارد",
+export const messageStates = {
+	0: "پیامک در صف ارسال قرار دارد",
+	1: "ارسال شده",
+	2: "پیامک به موبایل گیرنده تحویل شده است",
+	3: "پیامک به موبایل گیرنده تحویل نشده است",
+	4: "وضعیت نامشخص",
+	5: "پیامک توسط وب سرویس به شرکت ارمغان راه طلایی رسیده است",
+	6: "پیام از سمت اپراتور لغو شده است",
+	7: "پیام از سمت اپراتور منقضی شده است",
+	8: "پیام از سمت اپراتور reject شده است",
 } as const;
 
-export const messageStatuses = {
-	[-1]: "شناسه موجود نیست (شناسه نادرست یا گذشت بیش از ۲۴ ساعت از ارسال پیامک)",
-	0: "وضعیتی دریافت نشده",
-	1: "رسیده به گوشی",
-	2: "نرسیده به گوشی",
-	8: "رسیده به مخابرات",
-	16: "نرسیده به مخابرات",
+export const vesalErrors = {
+	0: "عملیات با موفقیت انجام شد",
+	[-100]: "refrenceId مورد نظر یافت نشد",
+	[-101]: "احراز هویت کاربر موفقیت آمیز نبود",
+	[-102]: "نام کاربری یافت نشد",
+	[-103]: "شماره originator اشتباه یا در بازه شماره های کاربر نیست",
+	[-104]: "اعتبار کم است",
+	[-105]: "فرمت درخواست اشتباه است",
+	[-106]: "تعداد refrenceId ها بیش از 1000 عدد است",
+	[-107]: "شماره گیرنده پیامک اشتباه است",
+	[-109]: "تاریخ انقضای حساب کاربری فرارسیده است",
+	[-110]: "درخواست از ip مجاز کاربر ارسال نشده است",
+	[-111]: "شماره گیرنده در بلک لیست قرار دارد",
+	[-112]: "حساب مشتری فعال نیست",
+	[-115]: "فرمت UDH اشتباه است",
+	[-117]: "مقدار mclass وارد شده اشتباه است",
+	[-118]: "شماره پورت وارد شده صحیح نیست",
+	[-119]: "کاربر به سرویس مورد نظر دسترسی ندارد",
+	[-120]: "پیام ارسال شده دارای هیچ شماره معتبری نیست",
+	[-200]: "خطای داخلی در پایگاه داده رخ داده است",
+	[-201]: "خطای نامشخص داخل پایگاه داده",
+	[-137]: "پیام نباید حاوی کلمات غیرمجاز می باشد",
 } as const;
 
 export default Vesal;
