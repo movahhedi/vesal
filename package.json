@@ -37,7 +37,9 @@
 	"unpkg": "./dist/vesal.umd.js",
 	"exports": {
 		".": {
+			"types": "./dist/vesal.d.ts",
 			"require": "./dist/vesal.cjs",
+			"import": "./dist/vesal.mjs",
 			"default": "./dist/vesal.modern.js"
 		},
 		"./ts": "./src/vesal.ts",
