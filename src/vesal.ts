@@ -306,5 +306,3 @@ export const vesalErrors = {
 	[-201]: "خطای نامشخص داخل پایگاه داده",
 	[-137]: "پیام نباید حاوی کلمات غیرمجاز می باشد",
 } as const;
-
-export default Vesal;
